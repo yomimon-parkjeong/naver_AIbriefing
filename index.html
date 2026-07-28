@@ -3,458 +3,407 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>구글 시트 업로더 & 뷰어</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    
+    <title>데이터 등록 & 대시보드 시스템</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        /* 기본 배경 및 폰트 설정 */
+        body { background-color: #f1f5f9; font-family: 'Pretendard', 'Malgun Gothic', sans-serif; }
         
-        body {
-            font-family: 'Inter', sans-serif;
+        /* 폼 컨테이너 미세 조정 */
+        .glass-panel { background: #ffffff; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01); }
+        
+        /* 💡 말풍선 겹침 해결 & 시인성 개선 */
+        .naver-search-group { position: relative; display: flex; align-items: stretch; gap: 8px; }
+        .bounce-tooltip {
+            position: absolute;
+            bottom: calc(100% + 12px);
+            right: 0;
+            background-color: #03c75a; 
+            color: white;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(3, 199, 90, 0.3);
+            animation: bounceSoft 1.5s infinite;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .bounce-tooltip::after {
+            content: ''; position: absolute; top: 100%; right: 24px;
+            border-width: 6px; border-style: solid; 
+            border-color: #03c75a transparent transparent transparent;
+        }
+        @keyframes bounceSoft {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        /* 💡 [등록내역보기] 독립 박스 스타일 */
+        .history-box {
             background-color: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            padding: 24px 20px;
+            margin-top: 36px;
+            text-align: center;
+            transition: all 0.2s ease;
         }
+        .history-box:hover { border-color: #94a3b8; background-color: #f1f5f9; }
 
-        /* Modal Animation */
-        @keyframes zoomIn {
-            from { transform: scale(0.95); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-        .animate-zoomIn {
-            animation: zoomIn 0.3s ease-out forwards;
-        }
+        /* 캡처본 붙여넣기 영역 */
+        .paste-area { border: 2px dashed #3b82f6; transition: all 0.2s ease; }
+        .paste-area:hover { background-color: #eff6ff; border-color: #2563eb; }
 
-        /* Toast Animation */
-        @keyframes slideInRight {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+        /* 토스트 알림창 */
+        .toast {
+            position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%);
+            padding: 14px 28px; border-radius: 50px; color: white; font-weight: bold;
+            transition: bottom 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); z-index: 9999;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
         }
-        .toast-enter {
-            animation: slideInRight 0.3s ease-out forwards;
-        }
+        .toast.show { bottom: 40px; }
         
-        /* Paste Area Transition */
-        .paste-area-transition {
-            transition: all 0.2s ease-in-out;
-        }
+        /* 화면 전환 처리 */
+        #dashboardView, #imageModal { display: none; }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4 text-slate-800">
+<body class="text-gray-800 flex flex-col items-center py-12 px-4 min-h-screen">
 
-    <div id="uploadForm" class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 sm:p-8 transition-all duration-300">
-        <div class="text-center mb-6">
-            <div class="inline-flex items-center justify-center w-12 h-12 bg-blue-100 rounded-full mb-3">
-                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                </svg>
-            </div>
-            <h2 class="text-2xl font-bold text-slate-900">데이터 등록 시스템</h2>
-            <p class="text-sm text-slate-500 mt-1">구글 시트로 데이터를 빠르게 전송하세요.</p>
+    <!-- 1. 데이터 등록 폼 -->
+    <div id="uploadForm" class="glass-panel w-full max-w-lg rounded-2xl overflow-hidden border border-gray-100">
+        <div class="bg-blue-600 text-white py-5 px-6 text-center border-b border-blue-700">
+            <h2 class="text-2xl font-bold tracking-tight">📊 데이터 등록 시스템</h2>
         </div>
-
-        <div class="space-y-4">
-            <!-- Keyword Input -->
-            <div>
-                <label for="keyword" class="block text-sm font-semibold text-slate-700 mb-1">AI 브리핑 키워드</label>
-                <input type="text" id="keyword" placeholder="키워드를 입력하세요" 
-                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors">
+        
+        <div class="p-8 space-y-7">
+            <!-- 키워드 & 네이버 검색 버튼 영역 -->
+            <div class="space-y-2">
+                <label class="block text-sm font-bold text-gray-700">AI 브리핑 키워드</label>
+                <div class="naver-search-group">
+                    <input type="text" id="keyword" placeholder="키워드를 입력하세요" 
+                        class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                    
+                    <button onclick="openNaverSearch()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-5 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 relative">
+                        <div class="bounce-tooltip">입력 키워드 미리보기</div>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        검색
+                    </button>
+                </div>
             </div>
 
-            <!-- URL Input -->
-            <div>
-                <label for="url" class="block text-sm font-semibold text-slate-700 mb-1">검색 URL</label>
+            <!-- 검색 URL -->
+            <div class="space-y-2">
+                <label class="block text-sm font-bold text-gray-700">검색 URL</label>
                 <input type="text" id="url" placeholder="https://..." 
-                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors">
+                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
             </div>
 
-            <!-- Paste Area -->
-            <div>
-                <label class="block text-sm font-semibold text-slate-700 mb-1">캡처본 붙여넣기</label>
-                <div id="pasteArea" 
-                    class="paste-area-transition w-full border-2 border-dashed border-blue-300 bg-blue-50/50 hover:bg-blue-50 rounded-lg p-6 sm:p-8 flex flex-col items-center justify-center cursor-pointer text-center group">
-                    <svg class="w-8 h-8 text-blue-400 group-hover:text-blue-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    <span class="text-sm font-medium text-blue-600" id="pasteText">이곳을 클릭 후 <kbd class="px-2 py-1 bg-white border border-slate-200 rounded-md shadow-sm text-xs font-sans text-slate-600 mx-1">Ctrl + V</kbd> 를 누르세요</span>
+            <!-- 캡처본 붙여넣기 영역 -->
+            <div class="space-y-2">
+                <label class="block text-sm font-bold text-gray-700">이미지 등록</label>
+                <div id="pasteArea" class="paste-area bg-gray-50 rounded-xl p-10 text-center cursor-pointer flex flex-col items-center justify-center gap-3">
+                    <svg class="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    <span class="text-blue-600 font-bold text-lg">이곳을 클릭 후 Ctrl + V 를 누르세요</span>
+                    <span class="text-gray-400 text-sm">또는 클립보드에 이미지를 복사해오세요</span>
                 </div>
-                
-                <!-- Image Preview -->
-                <div id="previewContainer" class="hidden mt-4 relative rounded-lg border border-slate-200 bg-slate-50 p-2">
-                    <div class="absolute top-3 right-3 flex space-x-1">
-                        <span class="bg-green-500 text-white text-xs font-bold px-2 py-1 rounded shadow-sm">이미지 로드됨</span>
-                    </div>
-                    <img id="imgPreview" class="w-full max-h-48 object-contain rounded" alt="Preview">
+                <div class="flex justify-center mt-4">
+                    <img id="imgPreview" class="max-h-56 rounded-lg shadow-md hidden border border-gray-200">
                 </div>
             </div>
 
-            <!-- Submit Button -->
-            <button id="submitBtn" onclick="submitData()" 
-                class="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:shadow-lg transform transition-all active:scale-[0.98] flex justify-center items-center">
-                <span>구글 시트로 전송</span>
-                <svg id="submitSpinner" class="hidden animate-spin ml-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+            <!-- 전송 버튼 -->
+            <button onclick="submitData()" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg flex items-center justify-center gap-2 mt-4">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                구글 시트로 전송
             </button>
+
+            <!-- [등록내역보기] 독립 박스 처리 -->
+            <div class="history-box">
+                <h3 class="text-gray-700 font-extrabold text-lg mb-1">데이터베이스 열람</h3>
+                <p class="text-sm text-gray-500 mb-5">현재까지 구글 시트에 누적된 모든 데이터를 확인합니다.</p>
+                <button onclick="loadHistory()" id="historyBtn" class="w-full bg-white hover:bg-gray-100 text-gray-800 border-2 border-gray-300 font-bold py-3 px-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                    [ 누적 등록 내역 보기 ]
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- 대시보드 뷰 (기본 숨김) -->
-    <div id="dashboardView" class="hidden bg-white rounded-2xl shadow-xl w-full max-w-4xl p-6 sm:p-8 transition-all duration-300 animate-zoomIn">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <div>
-                <div class="inline-flex items-center justify-center w-10 h-10 bg-green-100 rounded-full mb-2">
-                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                </div>
-                <h2 class="text-2xl font-bold text-slate-900">현재 등록 현황</h2>
-                <p class="text-sm text-slate-500 mt-1">구글 시트에 성공적으로 기록된 데이터입니다.</p>
-            </div>
-            <button onclick="resetToForm()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors flex items-center shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+    <!-- 2. 대시보드 화면 -->
+    <div id="dashboardView" class="glass-panel w-full max-w-6xl rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+        <div class="bg-gray-800 text-white py-5 px-8 flex justify-between items-center">
+            <h2 class="text-xl font-bold flex items-center gap-2">
+                <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                현재 등록 현황 대시보드
+            </h2>
+            <button onclick="resetForm()" class="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 새로 등록하기
             </button>
         </div>
         
-        <div class="overflow-x-auto rounded-lg border border-slate-200">
-            <table class="w-full text-left border-collapse min-w-[600px]">
-                <thead class="bg-slate-50">
-                    <tr class="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
-                        <th class="py-3 px-4 font-semibold w-1/6">등록 일시</th>
-                        <th class="py-3 px-4 font-semibold w-1/4">키워드</th>
-                        <th class="py-3 px-4 font-semibold w-2/4">검색 URL</th>
-                        <th class="py-3 px-4 font-semibold w-1/6 text-center">캡처본</th>
+        <div class="p-8 overflow-x-auto">
+            <div id="dashboardLoading" class="text-center py-16 hidden">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-gray-600 font-bold">시트 데이터를 불러오는 중입니다...</p>
+            </div>
+            
+            <div id="dashboardError" class="hidden text-center py-12 bg-red-50 rounded-xl border border-red-200">
+                <svg class="w-14 h-14 text-red-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <p class="text-red-600 font-extrabold text-xl mb-2">내역을 불러오지 못했습니다.</p>
+                <p id="errorDetail" class="text-sm text-red-500 mb-5 font-mono bg-red-100 p-2 inline-block rounded"></p>
+                <br>
+                <p class="text-sm text-gray-700 bg-white inline-block p-4 rounded-lg shadow-sm font-semibold border border-gray-200">
+                    💡 Apps Script 배포 시 버전을 <span class="text-blue-600 font-bold">[새 버전(New version)]</span>으로 갱신했는지 반드시 확인해주세요!
+                </p>
+            </div>
+            
+            <table class="w-full text-left border-collapse" id="historyTable">
+                <thead>
+                    <tr class="bg-gray-100 border-b-2 border-gray-300 text-gray-700 text-sm">
+                        <th class="p-4 font-bold w-1/5 text-center rounded-tl-lg">등록일시</th>
+                        <th class="p-4 font-bold w-1/4">키워드</th>
+                        <th class="p-4 font-bold w-1/3">검색 URL</th>
+                        <th class="p-4 font-bold w-auto text-center rounded-tr-lg">이미지 뷰어</th>
                     </tr>
                 </thead>
-                <tbody id="dashboardTableBody" class="bg-white divide-y divide-slate-100">
-                    <!-- Data rows will be injected here -->
+                <tbody id="historyTableBody" class="divide-y divide-gray-200 bg-white">
+                    <!-- Javascript 로우 데이터 주입 영역 -->
                 </tbody>
             </table>
         </div>
     </div>
 
-    <div id="imageModal" class="fixed inset-0 z-50 hidden bg-slate-900/90 backdrop-blur-sm flex-col items-center justify-center p-4">
-        <button onclick="closeModal()" class="absolute top-4 right-4 sm:top-8 sm:right-8 p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors">
-            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-        </button>
-        
-        <div id="loading" class="flex flex-col items-center text-white">
-            <svg class="animate-spin h-10 w-10 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span class="text-lg font-medium tracking-wide text-slate-200">이미지 불러오는 중...</span>
-        </div>
-        
-        <img id="modalImg" class="hidden max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-zoomIn" alt="Shared Image">
+    <!-- 3. 이미지 뷰어 모달 -->
+    <div id="imageModal" class="fixed inset-0 z-50 bg-gray-900 bg-opacity-95 flex items-center justify-center backdrop-filter backdrop-blur-sm">
+        <span onclick="closeModal()" class="absolute top-8 right-10 text-white text-5xl font-light cursor-pointer hover:text-red-400 transition-colors">&times;</span>
+        <div id="modalLoading" class="text-white text-xl font-bold animate-pulse">이미지 원본 불러오는 중...</div>
+        <img id="modalImg" class="max-w-[90%] max-h-[90%] rounded-xl shadow-2xl hidden object-contain border-4 border-gray-700">
     </div>
 
-    <div id="toastContainer" class="fixed top-4 right-4 z-[1000] flex flex-col gap-3 pointer-events-none"></div>
+    <!-- 4. 토스트 알림창 -->
+    <div id="toastContainer" class="toast"></div>
 
     <script>
-        // ⚠️ 구글 Apps Script 웹 앱 배포 URL이 적용되었습니다.
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyIIk86gOHzEqYv_KaymyvvAenftNTcApxMzCyJZMD3c0KIr8jnkbCSkIR5lh8OTfqusg/exec"; 
-        
+        // 백엔드 연동 URL
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyIIk86gOHzEqYv_KaymyvvAenftNTcApxMzCyJZMD3c0KIr8jnkbCSkIR5lh8OTfqusg/exec";
         let base64Image = "";
 
-        // Custom Toast Notification System (Replaces alert)
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            
-            // Base styles
-            toast.className = 'toast-enter pointer-events-auto flex items-center p-4 rounded-lg shadow-lg max-w-sm w-full border-l-4 bg-white text-slate-800';
-            
-            // Icon & Color based on type
-            let iconHtml = '';
-            if (type === 'success') {
-                toast.classList.add('border-green-500');
-                iconHtml = `<svg class="w-6 h-6 text-green-500 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>`;
-            } else if (type === 'error') {
-                toast.classList.add('border-red-500');
-                iconHtml = `<svg class="w-6 h-6 text-red-500 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
-            } else {
-                toast.classList.add('border-blue-500');
-                iconHtml = `<svg class="w-6 h-6 text-blue-500 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
-            }
-
-            toast.innerHTML = `
-                ${iconHtml}
-                <p class="text-sm font-medium">${message}</p>
-                <button onclick="this.parentElement.remove()" class="ml-auto text-slate-400 hover:text-slate-600">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            `;
-            
-            container.appendChild(toast);
-            
-            // Remove after 4 seconds
-            setTimeout(() => {
-                if (toast.parentElement) {
-                    toast.style.opacity = '0';
-                    toast.style.transform = 'translateX(100%)';
-                    toast.style.transition = 'all 0.3s ease-out';
-                    setTimeout(() => toast.remove(), 300);
-                }
-            }, 4000);
+        // 💡 [보안 패치] HTML 특수문자 변환 (XSS 방지용)
+        function escapeHTML(str) {
+            if (!str) return "";
+            return str.replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                "'": '&#39;',
+                '"': '&quot;'
+            }[tag] || tag));
         }
 
-        // 클립보드 이미지 붙여넣기 감지
-        const pasteArea = document.getElementById('pasteArea');
-        const pasteText = document.getElementById('pasteText');
-        const keywordInput = document.getElementById('keyword');
-        const urlInput = document.getElementById('url');
-        const previewContainer = document.getElementById('previewContainer');
-        const imgPreview = document.getElementById('imgPreview');
+        /* ==========================================
+           기능 1: 네이버 검색 새창 띄우기
+        ========================================== */
+        function openNaverSearch() {
+            const keyword = document.getElementById('keyword').value.trim();
+            if (!keyword) {
+                showToast("먼저 검색할 키워드를 입력해주세요!", "error");
+                document.getElementById('keyword').focus();
+                return;
+            }
+            const naverUrl = `https://search.naver.com/search.naver?query=${encodeURIComponent(keyword)}`;
+            window.open(naverUrl, '_blank');
+        }
 
-        pasteArea.addEventListener('click', () => {
-            // Remove focus from inputs so paste event hits the document body reliably
-            keywordInput.blur();
-            urlInput.blur();
-            showToast("Ctrl + V 를 눌러 이미지를 붙여넣으세요.", "info");
+        /* ==========================================
+           기능 2: 클립보드 이미지 붙여넣기
+        ========================================== */
+        document.getElementById('pasteArea').addEventListener('click', () => {
+            document.getElementById('keyword').blur();
+            document.getElementById('url').blur();
         });
 
         window.addEventListener('paste', function(e) {
-            // If focused on an input, don't intercept unless we specifically want to
-            if(document.activeElement === keywordInput || document.activeElement === urlInput) {
-                return; // Let standard text paste happen
-            }
-
-            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-            let imageFound = false;
-
+            const items = e.clipboardData.items;
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
-                    imageFound = true;
                     const blob = items[i].getAsFile();
                     const reader = new FileReader();
-                    
                     reader.onload = function(event) {
                         base64Image = event.target.result;
-                        
-                        // Update UI
-                        imgPreview.src = base64Image;
-                        previewContainer.classList.remove('hidden');
-                        
-                        // Style paste area as "success"
-                        pasteArea.classList.remove('border-blue-300', 'bg-blue-50/50', 'hover:bg-blue-50');
-                        pasteArea.classList.add('border-green-400', 'bg-green-50/50');
-                        pasteArea.querySelector('svg').classList.replace('text-blue-400', 'text-green-500');
-                        pasteText.innerHTML = "✅ 이미지 인식 완료! 다시 붙여넣어 변경 가능합니다.";
-                        pasteText.classList.replace('text-blue-600', 'text-green-600');
-                        
-                        showToast("이미지가 성공적으로 첨부되었습니다.", "success");
+                        const img = document.getElementById('imgPreview');
+                        img.src = base64Image;
+                        img.style.display = 'block';
+                        document.getElementById('pasteArea').innerHTML = "<span class='text-blue-600 font-bold text-lg'>✅ 이미지 인식 완료!</span><span class='text-gray-500 text-sm'>다시 붙여넣어 변경할 수 있습니다.</span>";
                     };
                     reader.readAsDataURL(blob);
-                    break; // Handle first image only
                 }
-            }
-
-            if (!imageFound) {
-                showToast("클립보드에 이미지가 없습니다.", "error");
             }
         });
 
-        // 구글 시트로 데이터 전송
+        /* ==========================================
+           기능 3: 데이터 제출 (CORS 안정성 패치 포함)
+        ========================================== */
         function submitData() {
-            const keyword = keywordInput.value.trim();
-            const url = urlInput.value.trim();
-            const submitBtn = document.getElementById('submitBtn');
-            const submitSpinner = document.getElementById('submitSpinner');
-            const btnText = submitBtn.querySelector('span');
+            const keyword = document.getElementById('keyword').value.trim();
+            const url = document.getElementById('url').value.trim();
+            const btn = document.getElementById('submitBtn');
 
-            // Validation
-            if (!keyword || !url || !base64Image) {
+            if(!keyword || !url || !base64Image) {
                 showToast("모든 필드를 입력하고 이미지를 붙여넣어 주세요.", "error");
-                
-                if (!keyword) keywordInput.focus();
-                else if (!url) urlInput.focus();
-                
                 return;
             }
 
-            // URL Validation (basic)
-            if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                showToast("올바른 URL 형식(http:// 또는 https://)을 입력해주세요.", "error");
-                urlInput.focus();
-                return;
-            }
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 구글 시트로 전송 중...`;
 
-            // Set loading state
-            submitBtn.disabled = true;
-            submitBtn.classList.add('opacity-80', 'cursor-not-allowed');
-            btnText.innerText = "전송 중...";
-            submitSpinner.classList.remove('hidden');
-
-            showToast("구글 시트로 데이터를 전송하고 있습니다...", "info");
-
-            // API Call
             fetch(WEB_APP_URL, {
                 method: 'POST',
+                // 💡 [안정성 패치] CORS Preflight 회피를 위한 헤더 추가
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ keyword: keyword, url: url, image: base64Image })
             })
-            .then(res => {
-                if(!res.ok) throw new Error("Network response was not ok");
-                return res.json();
-            })
+            .then(res => res.json())
             .then(data => {
                 if(data.result === "success") {
                     showToast("성공적으로 등록되었습니다!", "success");
-                    showDashboard(keyword, url, base64Image);
-                    resetButtonState();
+                    loadHistory();
                 } else {
-                    showToast("오류 발생: " + (data.error || "알 수 없는 오류"), "error");
-                    resetButtonState();
+                    showToast("오류 발생: " + data.error, "error");
+                    btn.disabled = false;
+                    btn.innerHTML = "구글 시트로 전송";
+                }
+            }).catch(err => {
+                showToast("네트워크 오류 발생!", "error");
+                btn.disabled = false;
+                btn.innerHTML = "구글 시트로 전송";
+            });
+        }
+
+        /* ==========================================
+           기능 4: 누적 데이터 불러오기
+        ========================================== */
+        function loadHistory() {
+            document.getElementById('uploadForm').style.display = 'none';
+            document.getElementById('dashboardView').style.display = 'block';
+            document.getElementById('dashboardLoading').style.display = 'block';
+            document.getElementById('historyTable').style.display = 'none';
+            document.getElementById('dashboardError').style.display = 'none';
+
+            fetch(`${WEB_APP_URL}?action=getHistory`)
+            .then(res => res.text())
+            .then(text => {
+                try {
+                    const data = JSON.parse(text);
+                    if (data.result === "success") {
+                        renderTable(data.data);
+                    } else {
+                        throw new Error(data.error || "알 수 없는 API 에러");
+                    }
+                } catch (e) {
+                    console.error("데이터 파싱 실패:", e, "원문:", text);
+                    document.getElementById('dashboardLoading').style.display = 'none';
+                    document.getElementById('dashboardError').style.display = 'block';
+                    document.getElementById('errorDetail').innerText = `원인: 백엔드 응답 형식 오류 (새 버전 배포 누락 의심)\n원문: ${text.substring(0, 50)}...`;
                 }
             })
             .catch(err => {
-                console.error(err);
-                showToast("네트워크 오류가 발생했습니다. Apps Script 설정을 확인하세요.", "error");
-                resetButtonState();
+                document.getElementById('dashboardLoading').style.display = 'none';
+                document.getElementById('dashboardError').style.display = 'block';
+                document.getElementById('errorDetail').innerText = "네트워크 오류: " + err.message;
             });
+        }
 
-            function resetButtonState() {
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('opacity-80', 'cursor-not-allowed');
-                btnText.innerText = "구글 시트로 전송";
-                submitSpinner.classList.add('hidden');
+        /* ==========================================
+           기능 5: 테이블 렌더링 (XSS 보안 패치 적용)
+        ========================================== */
+        function renderTable(historyList) {
+            document.getElementById('dashboardLoading').style.display = 'none';
+            document.getElementById('historyTable').style.display = 'table';
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+
+            if(historyList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-500 font-semibold">아직 등록된 데이터가 없습니다.</td></tr>`;
+                return;
             }
-        }
 
-        // 구글 시트에서 클릭해 들어왔을 때 자동으로 팝업 띄우기 (뷰어 기능)
-        window.onload = function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const imgId = urlParams.get('imgId');
-            
-            if (imgId) {
-                // 등록 폼은 숨기고 팝업 모달만 활성화
-                document.getElementById('uploadForm').style.display = 'none';
-                const modal = document.getElementById('imageModal');
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
+            historyList.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-blue-50 transition-colors";
                 
-                const loadingIndicator = document.getElementById('loading');
-                const modalImg = document.getElementById('modalImg');
-                
-                // 구글 드라이브로부터 이미지 원본 데이터 호출
-                fetch(`${WEB_APP_URL}?imgId=${imgId}`)
-                .then(res => {
-                    if(!res.ok) throw new Error("Fetch failed");
-                    return res.json();
-                })
-                .then(data => {
-                    if (data.error) throw new Error(data.error);
-                    
-                    loadingIndicator.style.display = 'none';
-                    modalImg.src = `data:${data.mimeType || 'image/png'};base64,${data.base64}`;
-                    modalImg.classList.remove('hidden');
-                })
-                .catch(err => {
-                    loadingIndicator.innerHTML = `
-                        <div class="text-red-400 mb-2">
-                            <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        </div>
-                        <span class="text-lg font-medium tracking-wide text-slate-200 text-center px-4">
-                            이미지를 불러오는데 실패했습니다.<br>
-                            <span class="text-sm text-slate-400 mt-2 block">권한을 확인하거나 ID가 유효한지 확인하세요.</span>
-                        </span>
-                    `;
-                });
-            }
+                // 💡 [보안 패치] escapeHTML을 사용하여 악성 스크립트 실행을 방지
+                tr.innerHTML = `
+                    <td class="p-4 text-center text-sm text-gray-600">${escapeHTML(item.date)}</td>
+                    <td class="p-4 font-bold text-gray-800">${escapeHTML(item.keyword)}</td>
+                    <td class="p-4"><a href="${escapeHTML(item.url)}" target="_blank" class="text-blue-500 hover:text-blue-700 underline text-sm break-all">${escapeHTML(item.url)}</a></td>
+                    <td class="p-4 text-center">
+                        <button onclick="openViewer('${escapeHTML(item.imgId)}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+                            📷 사진 보기
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
         }
 
-        // 대시보드 화면 표시 함수
-        function showDashboard(keyword, url, imgSrc) {
-            // 폼 숨기기 및 대시보드 표시
-            document.getElementById('uploadForm').style.display = 'none';
-            document.getElementById('dashboardView').classList.remove('hidden');
-            
-            const tbody = document.getElementById('dashboardTableBody');
-            
-            // 현재 시간 생성
-            const now = new Date();
-            const timeString = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-            
-            // 새 행 생성하여 상단에 추가 (최신 데이터가 위로 오도록)
-            const newRow = document.createElement('tr');
-            newRow.className = 'hover:bg-slate-50 transition-colors group';
-            newRow.innerHTML = `
-                <td class="py-4 px-4 text-sm text-slate-500 whitespace-nowrap">${timeString}</td>
-                <td class="py-4 px-4 text-sm font-semibold text-slate-900">${keyword}</td>
-                <td class="py-4 px-4 text-sm text-blue-600 truncate max-w-[200px] sm:max-w-xs">
-                    <a href="${url}" target="_blank" class="hover:underline flex items-center">
-                        <span class="truncate">${url}</span>
-                        <svg class="w-3 h-3 ml-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>
-                </td>
-                <td class="py-4 px-4 text-center">
-                    <img src="${imgSrc}" class="h-12 w-20 object-cover rounded mx-auto border border-slate-200 cursor-pointer hover:opacity-80 transition-opacity shadow-sm" onclick="showLocalPreview('${imgSrc}')" alt="썸네일">
-                </td>
-            `;
-            
-            tbody.insertBefore(newRow, tbody.firstChild);
-        }
-
-        // 폼 상태 초기화 및 대시보드 닫기
-        function resetToForm() {
-            // 입력창 초기화
-            keywordInput.value = '';
-            urlInput.value = '';
-            base64Image = '';
-            
-            // 이미지 미리보기 초기화
-            previewContainer.classList.add('hidden');
-            imgPreview.src = '';
-            
-            // 붙여넣기 영역 스타일 초기화
-            pasteArea.classList.remove('border-green-400', 'bg-green-50/50');
-            pasteArea.classList.add('border-blue-300', 'bg-blue-50/50', 'hover:bg-blue-50');
-            pasteArea.querySelector('svg').classList.replace('text-green-500', 'text-blue-400');
-            pasteText.innerHTML = '이곳을 클릭 후 <kbd class="px-2 py-1 bg-white border border-slate-200 rounded-md shadow-sm text-xs font-sans text-slate-600 mx-1">Ctrl + V</kbd> 를 누르세요';
-            pasteText.classList.replace('text-green-600', 'text-blue-600');
-            
-            // 화면 전환
-            document.getElementById('dashboardView').classList.add('hidden');
-            document.getElementById('uploadForm').style.display = 'block';
-            
-            keywordInput.focus();
-        }
-
-        // 대시보드에서 썸네일 클릭 시 로컬 팝업 표시
-        function showLocalPreview(src) {
+        // 뷰어 모달 열기
+        function openViewer(imgId) {
             const modal = document.getElementById('imageModal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            
-            document.getElementById('loading').style.display = 'none';
-            
             const modalImg = document.getElementById('modalImg');
-            modalImg.src = src;
-            modalImg.classList.remove('hidden');
+            const loading = document.getElementById('modalLoading');
+            
+            modal.style.display = 'flex';
+            modalImg.style.display = 'none';
+            loading.style.display = 'block';
+            loading.innerText = "이미지 원본 불러오는 중...";
+
+            fetch(`${WEB_APP_URL}?imgId=${imgId}`)
+            .then(res => res.json())
+            .then(data => {
+                loading.style.display = 'none';
+                modalImg.src = `data:${data.mimeType};base64,${data.base64}`;
+                modalImg.style.display = 'block';
+            })
+            .catch(err => {
+                loading.innerText = "이미지 호출 실패 (권한 문제 등)";
+            });
         }
 
-        // 팝업 닫기 함수 수정 (대시보드와 충돌 방지)
+        // 모달 닫기
         function closeModal() {
-            const modal = document.getElementById('imageModal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            document.getElementById('imageModal').style.display = 'none';
+            document.getElementById('modalImg').src = "";
+        }
+
+        // 폼 초기화 후 다시 입력 화면으로
+        function resetForm() {
+            document.getElementById('keyword').value = "";
+            document.getElementById('url').value = "";
+            base64Image = "";
+            document.getElementById('imgPreview').style.display = 'none';
+            document.getElementById('imgPreview').src = "";
+            document.getElementById('pasteArea').innerHTML = `
+                <svg class="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span class="text-blue-600 font-bold text-lg">이곳을 클릭 후 Ctrl + V 를 누르세요</span>
+            `;
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = false;
+            btn.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg> 구글 시트로 전송`;
             
-            // 외부(구글 시트)에서 URL 파라미터를 통해 들어온 경우에만 폼으로 돌아가는 폴백 실행
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('imgId')) {
-                try {
-                    window.close();
-                } catch (e) {
-                    console.log("Cannot close window natively.");
-                }
-                
-                setTimeout(() => {
-                    document.getElementById('uploadForm').style.display = 'block';
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }, 300);
-            }
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('uploadForm').style.display = 'block';
+        }
+
+        // 토스트 알림 함수
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toastContainer');
+            toast.innerText = message;
+            toast.style.backgroundColor = type === 'success' ? '#10b981' : '#ef4444';
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
     </script>
 </body>
